@@ -7,22 +7,23 @@ seen=()
 for dir in "${dirs[@]}"; do
     [[ -z "$dir" ]] && dir='.'
 
-    skip=0
+    already=0
     for s in "${seen[@]}"; do
         if [[ "$s" == "$dir" ]]; then
-            skip=1
+            already=1
             break
         fi
     done
-    ((skip)) && continue
+    ((already)) && continue
 
     seen+=("$dir")
 
-    if [[ -d "$dir" ]]; then
-        count=$(find "$dir" -maxdepth 1 -type f 2>/dev/null | wc -l)
-    else
-        count=0
+    if [[ ! -d "$dir" ]]; then
+        continue
     fi
 
+    count=$(find "$dir" -maxdepth 1 -type f 2>/dev/null | wc -l)
     echo "$dir => $count"
 done
+
+exit 0

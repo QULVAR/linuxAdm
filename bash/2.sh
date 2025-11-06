@@ -1,27 +1,27 @@
 #!/bin/bash
-set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
-	echo "Usage: $0 <directory>" >&2
-	exit 1
+    exit 1
 fi
 
-dir=$1
+path="$1"
 
-if [[ ! -d "$dir" ]]; then
-	echo "Error: directory '$dir' does not exist" >&2
-	exit 1
+if [[ ! -d "$path" ]]; then
+    exit 1
 fi
 
-shopt -s nullglob dotglob
+shopt -s nullglob
 
-for sub in "$dir"/*/; do
-	name=${sub%/}
-	name=${name##*/}
-	
-	entries=( "$sub"* )
-	count=${#entries[@]}
-	
-	echo "$count" > "$name"
+for subdir in "$path"/*/; do
+
+    [[ -d "$subdir" ]] || continue
+
+    name="${subdir%/}"
+    name="${name##*/}"
+
+    count=$(find "$subdir" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
+
+    echo "$count" > "$name"
 done
 
+exit 0

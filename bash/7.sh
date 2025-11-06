@@ -1,21 +1,28 @@
 #!/bin/bash
-set -euo pipefail
 
-IFS=':' read -r -a paths <<< "${PATH:-}"
+IFS=':' read -r -a dirs <<< "${PATH:-}"
 
-for dir in "${paths[@]}"; do
-	[[ -z "$dir" ]] && dir='.'
-	
-	if [[ -d "$dir" ]]; then
-		shopt -s nullglob
-		files=( "$dir"/* )
-		count=0
-		for f in "${files[@]}"; do
-			[[ -f "$f" ]] && ((count++))
-		done
-		echo "$dir: $count"
-	else
-		echo "$dir: not a directory" >&2
-	fi
+seen=()
+
+for dir in "${dirs[@]}"; do
+    [[ -z "$dir" ]] && dir='.'
+
+    skip=0
+    for s in "${seen[@]}"; do
+        if [[ "$s" == "$dir" ]]; then
+            skip=1
+            break
+        fi
+    done
+    ((skip)) && continue
+
+    seen+=("$dir")
+
+    if [[ -d "$dir" ]]; then
+        count=$(find "$dir" -maxdepth 1 -type f 2>/dev/null | wc -l)
+    else
+        count=0
+    fi
+
+    echo "$dir => $count"
 done
-

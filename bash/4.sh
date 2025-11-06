@@ -1,32 +1,15 @@
 #!/bin/bash
-set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-	echo "Usage: $0 <planet>" >&2
-	exit 1
-fi
+planet="$1"
 
-name=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-
-case "$name" in
-	mercury|меркурий)
-		echo 0 ;;
-	venus|венера)
-		echo 0 ;;
-	earth|земля)
-		echo 1 ;;
-	mars|марс)
-		echo 2 ;;
-	jupiter|юпитер)
-		echo 79 ;;
-	saturn|сатурн)
-		echo 83 ;;
-	uranus|уран)
-		echo 27 ;;
-	neptune|нептун)
-		echo 14 ;;
-	*)
-		echo "No such planet: $1" >&2
-		exit 1 ;;
+case "$planet" in
+    Mercury) echo 0 ;;
+    Venus)   echo 0 ;;
+    Earth)   echo 1 ;;
+    Mars)    echo 2 ;;
+    Jupiter) echo 98 ;;
+    Saturn)  echo 83 ;;
+    Uranus)  echo 27 ;;
+    Neptune) echo 14 ;;
+    *)       echo "Unknown planet" ;;
 esac
-

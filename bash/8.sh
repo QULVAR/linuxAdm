@@ -1,21 +1,23 @@
 #!/bin/bash
-set -euo pipefail
 
-names=( $(compgen -v LC_) )
+names=()
 
-if [[ ${#names[@]} -le 1 ]]; then
-	echo "OK"
-	exit 0
+while IFS='=' read -r name value; do
+    case "$name" in
+        LC_*) names+=("$name") ;;
+    esac
+done < <(env)
+
+if (( ${#names[@]} <= 1 )); then
+    exit 0
 fi
 
-ref_value=${!names[0]}
+first_value="${!names[0]}"
 
 for name in "${names[@]}"; do
-	if [[ "${!name}" != "$ref_value" ]]; then
-		echo "Error: LC_* variables have different values" >&2
-		exit 1
-	fi
+    if [[ "${!name}" != "$first_value" ]]; then
+        exit 1
+    fi
 done
 
-echo "OK"
-
+exit 0

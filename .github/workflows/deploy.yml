@@ -51,8 +51,10 @@ jobs:
           echo "${{ secrets.GHCR_TOKEN }}" | podman login ghcr.io -u "${{ secrets.GHCR_USER }}" --password-stdin
           podman pull "$IMAGE_TEST"
 
-          # ВАЖНО: host network, иначе 127.0.0.1 будет "внутри контейнера"
-          podman run --rm --name python-app-test --network host "$IMAGE_TEST" pytest -v
+          podman run --rm --name python-app-test --network host \
+            -e PYTHONPATH=/app \
+            -w /app \
+            "$IMAGE_TEST" pytest -v
 
           podman rmi "$IMAGE_TEST" >/dev/null 2>&1 || true
 
@@ -73,8 +75,8 @@ jobs:
           podman stop python-app >/dev/null 2>&1 || true
           podman rm -f python-app >/dev/null 2>&1 || true
 
-          # host network => порт 8052 открывается на сервере напрямую
           podman run -d --name python-app \
             --network host \
             --restart=always \
+            -e PYTHONPATH=/app \
             "$IMAGE_RUNTIME"

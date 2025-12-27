@@ -1,4 +1,4 @@
-name: CI/CD Podman Python App with GHCR (DB on server)
+name: CI/CD Podman (DB on server)
 
 on:
   push:
@@ -15,12 +15,12 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set IMAGE (lowercase)
         shell: bash
-        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
-        
-      - name: Log in to GHCR (podman)
+        run: echo "IMAGE=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - name: Login to GHCR (podman)
         shell: bash
         run: |
           echo "${{ secrets.GHCR_TOKEN }}" | podman login ghcr.io -u "${{ secrets.GHCR_USER }}" --password-stdin
@@ -41,62 +41,40 @@ jobs:
     runs-on: self-hosted
     needs: build-and-push
     steps:
-      - name: Run tests on server via SSH (uses server's Postgres on 127.0.0.1:5432)
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_SSH_PORT }}
-          script: |
-            set -euo pipefail
+      - name: Run tests on this server (uses server Postgres on 127.0.0.1:5432)
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}"
+          IMAGE_TEST="$IMAGE:test-${{ github.sha }}"
 
-            IMAGE="${{ env.REGISTRY }}/${{ github.repository }}"
-            IMAGE="$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')"
-            IMAGE_TEST="$IMAGE:test-${{ github.sha }}"
+          echo "${{ secrets.GHCR_TOKEN }}" | podman login ghcr.io -u "${{ secrets.GHCR_USER }}" --password-stdin
+          podman pull "$IMAGE_TEST"
 
-            echo "${{ secrets.GHCR_TOKEN }}" | podman login ghcr.io -u "${{ secrets.GHCR_USER }}" --password-stdin
-            podman pull "$IMAGE_TEST"
+          # ВАЖНО: host network, иначе 127.0.0.1 будет "внутри контейнера"
+          podman run --rm --name python-app-test --network host "$IMAGE_TEST" pytest -v
 
-            # ТЕСТЫ пойдут в 127.0.0.1:5432 => нужен host network
-            podman run --rm --name python-app-test --network host "$IMAGE_TEST" pytest -v
-
-            podman rmi "$IMAGE_TEST" >/dev/null 2>&1 || true
+          podman rmi "$IMAGE_TEST" >/dev/null 2>&1 || true
 
   deploy:
     runs-on: self-hosted
     needs: test
     steps:
-      - name: Deploy runtime image via SSH (uses server's Postgres on 127.0.0.1:5432)
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_SSH_PORT }}
-          script: |
-            set -euo pipefail
+      - name: Deploy runtime on this server (host network, port 8052)
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}"
+          IMAGE_RUNTIME="$IMAGE:runtime-${{ github.sha }}"
 
-            IMAGE="${{ env.REGISTRY }}/${{ github.repository }}"
-            IMAGE="$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')"
-            IMAGE_RUNTIME="$IMAGE:runtime-${{ github.sha }}"
+          echo "${{ secrets.GHCR_TOKEN }}" | podman login ghcr.io -u "${{ secrets.GHCR_USER }}" --password-stdin
+          podman pull "$IMAGE_RUNTIME"
 
-            echo "${{ secrets.GHCR_TOKEN }}" | podman login ghcr.io -u "${{ secrets.GHCR_USER }}" --password-stdin
-            podman pull "$IMAGE_RUNTIME"
+          podman stop python-app >/dev/null 2>&1 || true
+          podman rm -f python-app >/dev/null 2>&1 || true
 
-            podman stop python-app >/dev/null 2>&1 || true
-            podman rm -f python-app >/dev/null 2>&1 || true
-
-            # ВАЖНО: host network, иначе 127.0.0.1 будет "внутри контейнера", а не на сервере
-            # Порт 8052 будет открыт на сервере напрямую (проброс -p тут не нужен)
-            podman run -d --name python-app \
-              --network host \
-              --restart=always \
-              "$IMAGE_RUNTIME"
-
-            # (опционально) чистка старых runtime-образов
-            podman images --format "{{.Repository}}:{{.Tag}}" \
-              | grep "$(echo "$IMAGE" | sed 's/\//\\\//g'):" \
-              | grep "runtime-" \
-              | grep -v "${{ github.sha }}" \
-              | xargs -r podman rmi -f || true
+          # host network => порт 8052 открывается на сервере напрямую
+          podman run -d --name python-app \
+            --network host \
+            --restart=always \
+            "$IMAGE_RUNTIME"
